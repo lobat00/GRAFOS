@@ -1,25 +1,34 @@
 /*
  * ============================================================
- *  GRAFOS EM C - Implementação Prática Completa
- * ============================================================
- *  Conteúdo:
- *   1. DFS para percorrer componentes
- *   2. Contagem de componentes conexas
- *   3. Cálculo de in-degree
- *   4. Ordenação topológica (Kahn's Algorithm)
- *   5. Detecção de ciclos em digrafos (DFS com coloração)
+ *  GRAFOS EM C
+ *  Entrada Manual + DFS + Ciclos + Desenho ASCII
  * ============================================================
  */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <locale.h>
 
-/* ─── Estruturas ─────────────────────────────────────────── */
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #define MAX_VERTICES 100
 
-/* Lista de adjacência */
+#define RESET   "\x1b[0m"
+#define VERMELHO "\x1b[31m"
+#define VERDE    "\x1b[32m"
+#define AMARELO  "\x1b[33m"
+#define AZUL     "\x1b[34m"
+#define MAGENTA_PISCANDO   "\x1b[5;95m"
+
+
+/* ============================================================
+ * Estruturas
+ * ============================================================
+ */
+
 typedef struct No {
     int destino;
     struct No *prox;
@@ -30,279 +39,582 @@ typedef struct {
 } ListaAdj;
 
 typedef struct {
-    int V;               /* número de vértices            */
-    ListaAdj *adj;       /* vetor de listas de adjacência */
+    int V;
+    ListaAdj *adj;
 } Grafo;
 
-/* ─── Auxiliares de lista ────────────────────────────────── */
+/* ============================================================
+ * Criação de nós
+ * ============================================================
+ */
 
 No *criar_no(int destino) {
+
     No *novo = (No *)malloc(sizeof(No));
+
+    if (!novo) {
+        printf(VERMELHO "Erro de memoria.\n" RESET);
+        exit(1);
+    }
+
     novo->destino = destino;
-    novo->prox    = NULL;
+    novo->prox = NULL;
+
     return novo;
 }
 
-/* ─── Criação / destruição ───────────────────────────────── */
+/* ============================================================
+ * Criação do grafo
+ * ============================================================
+ */
 
 Grafo *criar_grafo(int V) {
+
     Grafo *g = (Grafo *)malloc(sizeof(Grafo));
-    g->V   = V;
+
+    if (!g) {
+        printf(VERMELHO "Erro de memoria.\n" RESET);
+        exit(1);
+    }
+
+    g->V = V;
+
     g->adj = (ListaAdj *)calloc(V, sizeof(ListaAdj));
+
+    if (!g->adj) {
+        printf(VERMELHO "Erro de memoria.\n" RESET);
+        exit(1);
+    }
+
     return g;
 }
 
+/* ============================================================
+ * Inserção de arestas
+ * ============================================================
+ */
+
 void adicionar_aresta(Grafo *g, int u, int v) {
-    /* Insere v na lista de u (digrafo: só uma direção) */
+
     No *novo = criar_no(v);
-    novo->prox      = g->adj[u].cabeca;
+
+    novo->prox = g->adj[u].cabeca;
+
     g->adj[u].cabeca = novo;
 }
 
 void adicionar_aresta_nao_dir(Grafo *g, int u, int v) {
+
     adicionar_aresta(g, u, v);
+
     adicionar_aresta(g, v, u);
 }
 
+/* ============================================================
+ * Liberar memória
+ * ============================================================
+ */
+
 void liberar_grafo(Grafo *g) {
+
     for (int i = 0; i < g->V; i++) {
+
         No *cur = g->adj[i].cabeca;
-        while (cur) { No *tmp = cur; cur = cur->prox; free(tmp); }
+
+        while (cur) {
+
+            No *tmp = cur;
+
+            cur = cur->prox;
+
+            free(tmp);
+        }
     }
+
     free(g->adj);
+
     free(g);
 }
 
-/* ─── 1. DFS ─────────────────────────────────────────────── */
-/*
- * Percorre o grafo a partir do vértice `inicio` usando busca em
- * profundidade e marca os vértices visitados em `visitado[]`.
+/* ============================================================
+ * Impressão lista de adjacência
+ * ============================================================
  */
-void dfs(Grafo *g, int v, int visitado[]) {
-    visitado[v] = 1;
-    printf("  visitando vértice %d\n", v);
 
-    for (No *cur = g->adj[v].cabeca; cur; cur = cur->prox) {
-        if (!visitado[cur->destino])
-            dfs(g, cur->destino, visitado);
-    }
-}
+void imprimir_grafo(Grafo *g, int dirigido) {
 
-/* ─── 2. Contagem de componentes conexas ─────────────────── */
-/*
- * Funciona para grafos NÃO-DIRIGIDOS.
- * Cada vez que encontra um vértice não visitado, inicia nova DFS
- * → nova componente.
- */
-int contar_componentes(Grafo *g) {
-    int visitado[MAX_VERTICES] = {0};
-    int componentes = 0;
+    printf("\n========================================\n");
+
+    if (dirigido)
+        printf(VERDE "GRAFO DIRIGIDO\n" RESET);
+    else
+        printf(VERDE "GRAFO NAO-DIRIGIDO\n" RESET);
+
+    printf("========================================\n");
 
     for (int v = 0; v < g->V; v++) {
-        if (!visitado[v]) {
-            printf("\n  [Componente %d] raiz = %d\n", componentes + 1, v);
-            dfs(g, v, visitado);
-            componentes++;
+
+        printf(AMARELO "[%d] -> " RESET, v);
+
+        for (No *cur = g->adj[v].cabeca;
+             cur;
+             cur = cur->prox) {
+
+            printf("%d ", cur->destino);
         }
-    }
-    return componentes;
-}
 
-/* ─── 3. Cálculo de in-degree ────────────────────────────── */
-/*
- * in-degree[v] = número de arestas que CHEGAM em v.
- * Percorre todas as listas de adjacência e incrementa o destino.
- */
-void calcular_in_degree(Grafo *g, int in_degree[]) {
-    memset(in_degree, 0, g->V * sizeof(int));
-
-    for (int u = 0; u < g->V; u++)
-        for (No *cur = g->adj[u].cabeca; cur; cur = cur->prox)
-            in_degree[cur->destino]++;
-}
-
-/* ─── 4. Ordenação Topológica (Kahn) ─────────────────────── */
-/*
- * Algoritmo de Kahn usando fila (BFS com in-degree):
- *   1. Enfileira todos os vértices com in-degree 0.
- *   2. Remove um vértice da fila, adiciona ao resultado,
- *      decrementa in-degree dos vizinhos; enfileira novos zeros.
- *   3. Se ao final nem todos os vértices foram processados,
- *      o grafo tem ciclo → ordenação topológica impossível.
- *
- * Retorna 1 se sucesso, 0 se detectou ciclo.
- */
-int ordenacao_topologica(Grafo *g) {
-    int in_degree[MAX_VERTICES];
-    calcular_in_degree(g, in_degree);
-
-    /* Fila simples com array */
-    int fila[MAX_VERTICES];
-    int frente = 0, traseira = 0;
-
-    for (int v = 0; v < g->V; v++)
-        if (in_degree[v] == 0)
-            fila[traseira++] = v;
-
-    int contagem = 0;
-    printf("  Ordem topológica: ");
-
-    while (frente < traseira) {
-        int u = fila[frente++];
-        printf("%d ", u);
-        contagem++;
-
-        for (No *cur = g->adj[u].cabeca; cur; cur = cur->prox) {
-            int v = cur->destino;
-            if (--in_degree[v] == 0)
-                fila[traseira++] = v;
-        }
-    }
-    printf("\n");
-
-    if (contagem != g->V) {
-        printf("  *** Ciclo detectado: ordenação topológica impossível! ***\n");
-        return 0;
-    }
-    return 1;
-}
-
-/* ─── 5. Detecção de ciclos em digrafos (DFS + coloração) ── */
-/*
- * Cada vértice tem uma cor:
- *   BRANCO (0) = não visitado
- *   CINZA  (1) = em processamento (na pilha de recursão)
- *   PRETO  (2) = totalmente processado
- *
- * Se durante a DFS encontramos uma aresta para um vértice CINZA,
- * encontramos uma aresta de retorno → ciclo!
- */
-#define BRANCO 0
-#define CINZA  1
-#define PRETO  2
-
-int dfs_ciclo(Grafo *g, int v, int cor[]) {
-    cor[v] = CINZA;
-
-    for (No *cur = g->adj[v].cabeca; cur; cur = cur->prox) {
-        int u = cur->destino;
-        if (cor[u] == CINZA) {
-            printf("  Aresta de retorno: %d -> %d  (CICLO!)\n", v, u);
-            return 1;          /* ciclo encontrado */
-        }
-        if (cor[u] == BRANCO && dfs_ciclo(g, u, cor))
-            return 1;
-    }
-
-    cor[v] = PRETO;
-    return 0;
-}
-
-int detectar_ciclo(Grafo *g) {
-    int cor[MAX_VERTICES];
-    memset(cor, BRANCO, sizeof(cor));
-
-    for (int v = 0; v < g->V; v++)
-        if (cor[v] == BRANCO)
-            if (dfs_ciclo(g, v, cor))
-                return 1;
-
-    return 0;
-}
-
-/* ─── Impressão do grafo ─────────────────────────────────── */
-
-void imprimir_grafo(Grafo *g, const char *titulo) {
-    printf("\n=== %s (%d vértices) ===\n", titulo, g->V);
-    for (int v = 0; v < g->V; v++) {
-        printf("  [%d] ->", v);
-        for (No *cur = g->adj[v].cabeca; cur; cur = cur->prox)
-            printf(" %d", cur->destino);
         printf("\n");
     }
 }
 
-/* ─── main ───────────────────────────────────────────────── */
+/* ============================================================
+ * Desenho ASCII do grafo
+ * ============================================================
+ */
 
-int main(void) {
+void desenhar_grafo(Grafo *g, int dirigido) {
 
-    printf("╔══════════════════════════════════════════════════╗\n");
-    printf("║        GRAFOS EM C — Demonstração Completa       ║\n");
-    printf("╚══════════════════════════════════════════════════╝\n");
+    printf("\n========================================\n");
+    printf(VERDE "DESENHO DO GRAFO\n" RESET);
+    printf("========================================\n\n");
 
-    /* ── Teste 1: Grafo não-dirigido — componentes conexas ── */
-    printf("\n\n━━━ TESTE 1: Componentes Conexas (grafo não-dirigido) ━━━\n");
+    int matriz[MAX_VERTICES][MAX_VERTICES];
 
-    Grafo *gnd = criar_grafo(7);
-    /* Componente 1: 0-1-2 */
-    adicionar_aresta_nao_dir(gnd, 0, 1);
-    adicionar_aresta_nao_dir(gnd, 1, 2);
-    /* Componente 2: 3-4 */
-    adicionar_aresta_nao_dir(gnd, 3, 4);
-    /* Componente 3: 5-6 */
-    adicionar_aresta_nao_dir(gnd, 5, 6);
+    memset(matriz, 0, sizeof(matriz));
 
-    imprimir_grafo(gnd, "Grafo Não-Dirigido");
+    /* monta matriz */
 
-    printf("\nDFS por componentes:\n");
-    int total = contar_componentes(gnd);
-    printf("\n  Total de componentes conexas: %d\n", total);
-    liberar_grafo(gnd);
+    for (int u = 0; u < g->V; u++) {
 
-    /* ── Teste 2: Digrafo sem ciclo — in-degree + topo ─────── */
-    printf("\n\n━━━ TESTE 2: In-degree + Ordenação Topológica (DAG) ━━━\n");
-    /*
-     *  0 → 1 → 3
-     *  0 → 2 → 3
-     *  2 → 4
-     */
-    Grafo *dag = criar_grafo(5);
-    adicionar_aresta(dag, 0, 1);
-    adicionar_aresta(dag, 0, 2);
-    adicionar_aresta(dag, 1, 3);
-    adicionar_aresta(dag, 2, 3);
-    adicionar_aresta(dag, 2, 4);
+        for (No *cur = g->adj[u].cabeca;
+             cur;
+             cur = cur->prox) {
 
-    imprimir_grafo(dag, "DAG (sem ciclo)");
+            matriz[u][cur->destino] = 1;
+        }
+    }
 
-    int in_degree[MAX_VERTICES];
-    calcular_in_degree(dag, in_degree);
-    printf("\n  In-degrees:\n");
-    for (int v = 0; v < dag->V; v++)
-        printf("    vértice %d: in-degree = %d\n", v, in_degree[v]);
+    /* imprime arestas */
+
+    for (int i = 0; i < g->V; i++) {
+
+        for (int j = 0; j < g->V; j++) {
+
+            if (matriz[i][j]) {
+
+                /* evita duplicar aresta
+                   em não-dirigido */
+
+                if (!dirigido && i > j)
+                    continue;
+
+                if (dirigido)
+                    printf("(%d) " AMARELO "----->" RESET " (%d)\n", i, j);
+                else
+                    printf("(%d) " AMARELO "-------" RESET " (%d)\n", i, j);
+            }
+        }
+    }
 
     printf("\n");
-    ordenacao_topologica(dag);
+}
 
-    printf("\n  Detecção de ciclo: ");
-    printf(detectar_ciclo(dag) ? "CICLO DETECTADO\n" : "Sem ciclo ✓\n");
-    liberar_grafo(dag);
+/* ============================================================
+ * DFS
+ * ============================================================
+ */
 
-    /* ── Teste 3: Digrafo COM ciclo ────────────────────────── */
-    printf("\n\n━━━ TESTE 3: Detecção de Ciclo em Digrafo ━━━\n");
-    /*
-     *  0 → 1 → 2 → 0   (ciclo!)
-     *  3 → 4
-     */
-    Grafo *gcirc = criar_grafo(5);
-    adicionar_aresta(gcirc, 0, 1);
-    adicionar_aresta(gcirc, 1, 2);
-    adicionar_aresta(gcirc, 2, 0);   /* fecha o ciclo */
-    adicionar_aresta(gcirc, 3, 4);
+void dfs(Grafo *g, int v, int visitado[]) {
 
-    imprimir_grafo(gcirc, "Digrafo com ciclo");
+    visitado[v] = 1;
 
-    printf("\n  Buscando ciclos com DFS (coloração):\n");
-    if (detectar_ciclo(gcirc))
-        printf("  Resultado: CICLO DETECTADO ✓\n");
-    else
-        printf("  Resultado: Sem ciclo\n");
+    printf(AMARELO "Visitando vertice " RESET "%d\n", v);
 
-    printf("\n  Tentando ordenação topológica:\n  ");
-    ordenacao_topologica(gcirc);
-    liberar_grafo(gcirc);
+    for (No *cur = g->adj[v].cabeca;
+         cur;
+         cur = cur->prox) {
 
-    printf("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-    printf("  Fim da demonstração.\n\n");
+        int u = cur->destino;
+
+        if (!visitado[u]) {
+            dfs(g, u, visitado);
+        }
+    }
+}
+
+/* ============================================================
+ * Componentes conexas
+ * ============================================================
+ */
+
+int contar_componentes(Grafo *g) {
+
+    int visitado[MAX_VERTICES] = {0};
+
+    int componentes = 0;
+
+    for (int v = 0; v < g->V; v++) {
+
+        if (!visitado[v]) {
+
+            printf(AZUL "\nComponente %d:\n" RESET,
+                   componentes + 1);
+
+            dfs(g, v, visitado);
+
+            componentes++;
+        }
+    }
+
+    return componentes;
+}
+
+/* ============================================================
+ * In-degree
+ * ============================================================
+ */
+
+void calcular_in_degree(Grafo *g,
+                         int in_degree[]) {
+
+    memset(in_degree, 0,
+           g->V * sizeof(int));
+
+    for (int u = 0; u < g->V; u++) {
+
+        for (No *cur = g->adj[u].cabeca;
+             cur;
+             cur = cur->prox) {
+
+            in_degree[cur->destino]++;
+        }
+    }
+}
+
+/* ============================================================
+ * Ordenação topológica
+ * ============================================================
+ */
+
+int ordenacao_topologica(Grafo *g) {
+
+    int in_degree[MAX_VERTICES];
+
+    calcular_in_degree(g, in_degree);
+
+    int fila[MAX_VERTICES];
+
+    int frente = 0;
+    int traseira = 0;
+
+    for (int v = 0; v < g->V; v++) {
+
+        if (in_degree[v] == 0) {
+            fila[traseira++] = v;
+        }
+    }
+
+    int contagem = 0;
+
+    printf(AZUL "Ordem topologica:\n" RESET);
+
+    int primeiro = 1;
+
+    while (frente < traseira) {
+
+        int u = fila[frente++];
+
+        if (!primeiro) {
+            printf(AZUL "--> " RESET);
+        }
+
+        printf(AMARELO "%d " RESET, u);
+
+        primeiro = 0;
+
+        contagem++;
+
+        for (No *cur = g->adj[u].cabeca;
+             cur;
+             cur = cur->prox) {
+
+            int v = cur->destino;
+
+            in_degree[v]--;
+
+            if (in_degree[v] == 0) {
+                fila[traseira++] = v;
+            }
+        }
+    }
+
+    printf("\n");
+
+    if (contagem != g->V) {
+
+        printf("VERMELHO \nCiclo detectado.\n" RESET);
+        printf(VERMELHO "Ordenacao topologica impossivel.\n" RESET);
+
+        return 0;
+    }
+
+    return 1;
+}
+
+/* ============================================================
+ * Detecção de ciclo
+ * ============================================================
+ */
+
+#define BRANCO 0
+#define CINZA 1
+#define PRETO 2
+
+int dfs_ciclo(Grafo *g,
+              int v,
+              int cor[]) {
+
+    cor[v] = CINZA;
+
+    for (No *cur = g->adj[v].cabeca;
+         cur;
+         cur = cur->prox) {
+
+        int u = cur->destino;
+
+        if (cor[u] == CINZA) {
+
+            printf("\nCiclo encontrado: %d -> %d\n",
+                   v, u);
+
+            return 1;
+        }
+
+        if (cor[u] == BRANCO &&
+            dfs_ciclo(g, u, cor)) {
+
+            return 1;
+        }
+    }
+
+    cor[v] = PRETO;
+
+    return 0;
+}
+
+int detectar_ciclo(Grafo *g) {
+
+    int cor[MAX_VERTICES];
+
+    memset(cor, BRANCO, sizeof(cor));
+
+    for (int v = 0; v < g->V; v++) {
+
+        if (cor[v] == BRANCO) {
+
+            if (dfs_ciclo(g, v, cor)) {
+                return 1;
+            }
+        }
+    }
+
+    return 0;
+}
+
+/* ============================================================
+ * MAIN
+ * ============================================================
+ */
+
+int main() {
+
+    setlocale(LC_ALL, "");
+
+#ifdef _WIN32
+
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+
+#endif
+
+    while (1) {
+
+        int opcao;
+
+        printf("\n========================================\n");
+        printf(VERDE "SISTEMA DE GRAFOS EM C\n" RESET);
+        printf("========================================\n");
+
+        printf(AZUL "1 - Criar e analisar grafo\n" RESET);
+        printf(AZUL "2 - Limpar tela\n" RESET);
+        printf(AZUL "3 - Sair\n" RESET);
+
+        printf(AMARELO "\nEscolha: " RESET);
+        scanf("%d", &opcao);
+
+        /* ================================================ */
+
+        if (opcao == 3) {
+
+            printf("\nEncerrando programa...\n");
+            break;
+        }
+
+        /* ================================================ */
+
+        if (opcao == 2) {
+
+#ifdef _WIN32
+            system("cls");
+#else
+            system("clear");
+#endif
+            continue;
+        }
+
+        /* ================================================ */
+
+        if (opcao != 1) {
+
+            printf(VERMELHO "\nOpcao invalida.\n" RESET);
+            continue;
+        }
+
+        /* ================================================ */
+
+        int V;
+        int E;
+        int dirigido;
+
+        printf(AZUL "\nDigite a quantidade de: " RESET);
+        printf(AMARELO "\nVertices: " RESET);
+        scanf("%d", &V);
+
+        if (V <= 0 || V > MAX_VERTICES) {
+
+            printf(VERMELHO "Quantidade invalida.\n" RESET);
+
+            continue;
+        }
+
+        printf(AMARELO "Arestas: " RESET);
+        scanf("%d", &E);
+
+        printf(AZUL "\nTipo do grafo:\n" RESET);
+        printf("0 - Nao-dirigido\n");
+        printf("1 - Dirigido\n");
+
+        printf(AMARELO "\nEscolha: " RESET);
+        scanf("%d", &dirigido);
+
+        Grafo *g = criar_grafo(V);
+
+        printf(AZUL "\nDigite as arestas:\n" RESET);
+        printf("Formato: origem destino\n\n");
+
+        for (int i = 0; i < E; i++) {
+
+            int u;
+            int v;
+
+            printf(AMARELO "Aresta %d: " RESET, i + 1);
+
+            scanf("%d %d", &u, &v);
+
+            if (u < 0 || u >= V ||
+                v < 0 || v >= V) {
+
+                printf("Vertice invalido.\n");
+
+                i--;
+
+                continue;
+            }
+
+            if (dirigido)
+                adicionar_aresta(g, u, v);
+            else
+                adicionar_aresta_nao_dir(g, u, v);
+        }
+
+        /* ================================================
+         * IMPRESSÃO
+         * ================================================
+         */
+
+        imprimir_grafo(g, dirigido);
+
+        /* ================================================
+         * DESENHO ASCII
+         * ================================================
+         */
+
+        desenhar_grafo(g, dirigido);
+
+        /* ================================================
+         * DFS / COMPONENTES
+         * ================================================
+         */
+
+        printf("\n========================================\n");
+        printf(VERDE "DFS / COMPONENTES\n" RESET);
+        printf("========================================\n");
+
+        int componentes = contar_componentes(g);
+
+        printf(AMARELO "\nTotal de componentes: " RESET "%d\n", componentes);
+
+        /* ================================================
+         * GRAFO DIRIGIDO
+         * ================================================
+         */
+
+        if (dirigido) {
+
+            int in_degree[MAX_VERTICES];
+
+            calcular_in_degree(g, in_degree);
+
+            printf("\n========================================\n");
+            printf(VERDE "IN-DEGREE\n" RESET);
+            printf("========================================\n");
+
+            for (int v = 0; v < V; v++) {
+
+            printf(AMARELO "Vertice " RESET "%d " AMARELO "->" RESET " %d\n",
+                       v,
+                       in_degree[v]);
+            }
+
+            printf("\n========================================\n");
+            printf(VERDE "DETECCAO DE CICLO\n" RESET);
+            printf("========================================\n");
+
+            if (detectar_ciclo(g))
+                printf(VERMELHO "O grafo possui ciclo.\n" RESET);
+            else
+                printf(AMARELO "O grafo NAO possui ciclo.\n" RESET);
+
+            printf("\n========================================\n");
+            printf(VERDE "ORDENACAO TOPOLOGICA\n" RESET);
+            printf("========================================\n");
+
+            ordenacao_topologica(g);
+        }
+
+        liberar_grafo(g);
+
+        printf(MAGENTA_PISCANDO "\nPressione ENTER para continuar..." RESET);
+
+        getchar();
+        getchar();
+
+#ifdef _WIN32
+        system("cls");
+#else
+        system("clear");
+#endif
+    }
+
     return 0;
 }
