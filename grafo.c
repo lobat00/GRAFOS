@@ -1,6 +1,7 @@
 /*
  * ============================================================
- *  GRAFOS EM C - Entrada Manual + DFS + DAG + Ciclos
+ *  GRAFOS EM C
+ *  Entrada Manual + DFS + Ciclos + Desenho ASCII
  * ============================================================
  */
 
@@ -14,6 +15,14 @@
 #endif
 
 #define MAX_VERTICES 100
+
+#define RESET   "\x1b[0m"
+#define VERMELHO "\x1b[31m"
+#define VERDE    "\x1b[32m"
+#define AMARELO  "\x1b[33m"
+#define AZUL     "\x1b[34m"
+#define MAGENTA_PISCANDO   "\x1b[5;95m"
+
 
 /* ============================================================
  * Estruturas
@@ -44,7 +53,7 @@ No *criar_no(int destino) {
     No *novo = (No *)malloc(sizeof(No));
 
     if (!novo) {
-        printf("Erro de memória.\n");
+        printf(VERMELHO "Erro de memoria.\n" RESET);
         exit(1);
     }
 
@@ -64,7 +73,7 @@ Grafo *criar_grafo(int V) {
     Grafo *g = (Grafo *)malloc(sizeof(Grafo));
 
     if (!g) {
-        printf("Erro de memória.\n");
+        printf(VERMELHO "Erro de memoria.\n" RESET);
         exit(1);
     }
 
@@ -73,7 +82,7 @@ Grafo *criar_grafo(int V) {
     g->adj = (ListaAdj *)calloc(V, sizeof(ListaAdj));
 
     if (!g->adj) {
-        printf("Erro de memória.\n");
+        printf(VERMELHO "Erro de memoria.\n" RESET);
         exit(1);
     }
 
@@ -128,7 +137,7 @@ void liberar_grafo(Grafo *g) {
 }
 
 /* ============================================================
- * Impressão do grafo
+ * Impressão lista de adjacência
  * ============================================================
  */
 
@@ -137,15 +146,15 @@ void imprimir_grafo(Grafo *g, int dirigido) {
     printf("\n========================================\n");
 
     if (dirigido)
-        printf("GRAFO DIRIGIDO\n");
+        printf(VERDE "GRAFO DIRIGIDO\n" RESET);
     else
-        printf("GRAFO NÃO-DIRIGIDO\n");
+        printf(VERDE "GRAFO NAO-DIRIGIDO\n" RESET);
 
     printf("========================================\n");
 
     for (int v = 0; v < g->V; v++) {
 
-        printf("[%d] -> ", v);
+        printf(AMARELO "[%d] -> " RESET, v);
 
         for (No *cur = g->adj[v].cabeca;
              cur;
@@ -159,6 +168,58 @@ void imprimir_grafo(Grafo *g, int dirigido) {
 }
 
 /* ============================================================
+ * Desenho ASCII do grafo
+ * ============================================================
+ */
+
+void desenhar_grafo(Grafo *g, int dirigido) {
+
+    printf("\n========================================\n");
+    printf(VERDE "DESENHO DO GRAFO\n" RESET);
+    printf("========================================\n\n");
+
+    int matriz[MAX_VERTICES][MAX_VERTICES];
+
+    memset(matriz, 0, sizeof(matriz));
+
+    /* monta matriz */
+
+    for (int u = 0; u < g->V; u++) {
+
+        for (No *cur = g->adj[u].cabeca;
+             cur;
+             cur = cur->prox) {
+
+            matriz[u][cur->destino] = 1;
+        }
+    }
+
+    /* imprime arestas */
+
+    for (int i = 0; i < g->V; i++) {
+
+        for (int j = 0; j < g->V; j++) {
+
+            if (matriz[i][j]) {
+
+                /* evita duplicar aresta
+                   em não-dirigido */
+
+                if (!dirigido && i > j)
+                    continue;
+
+                if (dirigido)
+                    printf("(%d) " AMARELO "----->" RESET " (%d)\n", i, j);
+                else
+                    printf("(%d) " AMARELO "-------" RESET " (%d)\n", i, j);
+            }
+        }
+    }
+
+    printf("\n");
+}
+
+/* ============================================================
  * DFS
  * ============================================================
  */
@@ -167,7 +228,7 @@ void dfs(Grafo *g, int v, int visitado[]) {
 
     visitado[v] = 1;
 
-    printf("Visitando vértice %d\n", v);
+    printf(AMARELO "Visitando vertice " RESET "%d\n", v);
 
     for (No *cur = g->adj[v].cabeca;
          cur;
@@ -196,7 +257,7 @@ int contar_componentes(Grafo *g) {
 
         if (!visitado[v]) {
 
-            printf("\nComponente %d:\n",
+            printf(AZUL "\nComponente %d:\n" RESET,
                    componentes + 1);
 
             dfs(g, v, visitado);
@@ -255,13 +316,21 @@ int ordenacao_topologica(Grafo *g) {
 
     int contagem = 0;
 
-    printf("\nOrdem topológica:\n");
+    printf(AZUL "Ordem topologica:\n" RESET);
+
+    int primeiro = 1;
 
     while (frente < traseira) {
 
         int u = fila[frente++];
 
-        printf("%d ", u);
+        if (!primeiro) {
+            printf(AZUL "--> " RESET);
+        }
+
+        printf(AMARELO "%d " RESET, u);
+
+        primeiro = 0;
 
         contagem++;
 
@@ -283,8 +352,8 @@ int ordenacao_topologica(Grafo *g) {
 
     if (contagem != g->V) {
 
-        printf("\nCiclo detectado.\n");
-        printf("Ordenação topológica impossível.\n");
+        printf("VERMELHO \nCiclo detectado.\n" RESET);
+        printf(VERMELHO "Ordenacao topologica impossivel.\n" RESET);
 
         return 0;
     }
@@ -359,12 +428,10 @@ int detectar_ciclo(Grafo *g) {
 
 int main() {
 
-    /* UTF-8 Linux */
     setlocale(LC_ALL, "");
 
 #ifdef _WIN32
 
-    /* UTF-8 Windows */
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
 
@@ -375,32 +442,25 @@ int main() {
         int opcao;
 
         printf("\n========================================\n");
-        printf("SISTEMA DE GRAFOS EM C\n");
+        printf(VERDE "SISTEMA DE GRAFOS EM C\n" RESET);
         printf("========================================\n");
 
-        printf("1 - Criar e analisar grafo\n");
-        printf("2 - Limpar tela\n");
-        printf("3 - Sair\n");
+        printf(AZUL "1 - Criar e analisar grafo\n" RESET);
+        printf(AZUL "2 - Limpar tela\n" RESET);
+        printf(AZUL "3 - Sair\n" RESET);
 
-        printf("\nEscolha: ");
+        printf(AMARELO "\nEscolha: " RESET);
         scanf("%d", &opcao);
 
-        /* ====================================================
-         * SAIR
-         * ====================================================
-         */
+        /* ================================================ */
 
         if (opcao == 3) {
 
             printf("\nEncerrando programa...\n");
-
             break;
         }
 
-        /* ====================================================
-         * LIMPAR TELA
-         * ====================================================
-         */
+        /* ================================================ */
 
         if (opcao == 2) {
 
@@ -409,54 +469,47 @@ int main() {
 #else
             system("clear");
 #endif
-
             continue;
         }
 
-        /* ====================================================
-         * OPÇÃO INVÁLIDA
-         * ====================================================
-         */
+        /* ================================================ */
 
         if (opcao != 1) {
 
-            printf("\nOpção inválida.\n");
-
+            printf(VERMELHO "\nOpcao invalida.\n" RESET);
             continue;
         }
 
-        /* ====================================================
-         * CRIAÇÃO DO GRAFO
-         * ====================================================
-         */
+        /* ================================================ */
 
         int V;
         int E;
         int dirigido;
 
-        printf("\nNúmero de vértices: ");
+        printf(AZUL "\nDigite a quantidade de: " RESET);
+        printf(AMARELO "\nVertices: " RESET);
         scanf("%d", &V);
 
         if (V <= 0 || V > MAX_VERTICES) {
 
-            printf("Quantidade inválida.\n");
+            printf(VERMELHO "Quantidade invalida.\n" RESET);
 
             continue;
         }
 
-        printf("Número de arestas: ");
+        printf(AMARELO "Arestas: " RESET);
         scanf("%d", &E);
 
-        printf("\nTipo do grafo:\n");
+        printf(AZUL "\nTipo do grafo:\n" RESET);
+        printf("0 - Nao-dirigido\n");
         printf("1 - Dirigido\n");
-        printf("0 - Não-dirigido\n");
 
-        printf("Escolha: ");
+        printf(AMARELO "\nEscolha: " RESET);
         scanf("%d", &dirigido);
 
         Grafo *g = criar_grafo(V);
 
-        printf("\nDigite as arestas:\n");
+        printf(AZUL "\nDigite as arestas:\n" RESET);
         printf("Formato: origem destino\n\n");
 
         for (int i = 0; i < E; i++) {
@@ -464,14 +517,14 @@ int main() {
             int u;
             int v;
 
-            printf("Aresta %d: ", i + 1);
+            printf(AMARELO "Aresta %d: " RESET, i + 1);
 
             scanf("%d %d", &u, &v);
 
             if (u < 0 || u >= V ||
                 v < 0 || v >= V) {
 
-                printf("Vértice inválido.\n");
+                printf("Vertice invalido.\n");
 
                 i--;
 
@@ -484,30 +537,36 @@ int main() {
                 adicionar_aresta_nao_dir(g, u, v);
         }
 
-        /* ====================================================
+        /* ================================================
          * IMPRESSÃO
-         * ====================================================
+         * ================================================
          */
 
         imprimir_grafo(g, dirigido);
 
-        /* ====================================================
+        /* ================================================
+         * DESENHO ASCII
+         * ================================================
+         */
+
+        desenhar_grafo(g, dirigido);
+
+        /* ================================================
          * DFS / COMPONENTES
-         * ====================================================
+         * ================================================
          */
 
         printf("\n========================================\n");
-        printf("DFS / COMPONENTES\n");
+        printf(VERDE "DFS / COMPONENTES\n" RESET);
         printf("========================================\n");
 
         int componentes = contar_componentes(g);
 
-        printf("\nTotal de componentes: %d\n",
-               componentes);
+        printf(AMARELO "\nTotal de componentes: " RESET "%d\n", componentes);
 
-        /* ====================================================
+        /* ================================================
          * GRAFO DIRIGIDO
-         * ====================================================
+         * ================================================
          */
 
         if (dirigido) {
@@ -517,37 +576,27 @@ int main() {
             calcular_in_degree(g, in_degree);
 
             printf("\n========================================\n");
-            printf("IN-DEGREE\n");
+            printf(VERDE "IN-DEGREE\n" RESET);
             printf("========================================\n");
 
             for (int v = 0; v < V; v++) {
 
-                printf("Vértice %d -> %d\n",
+            printf(AMARELO "Vertice " RESET "%d " AMARELO "->" RESET " %d\n",
                        v,
                        in_degree[v]);
             }
 
-            /* ================================================
-             * CICLO
-             * ================================================
-             */
-
             printf("\n========================================\n");
-            printf("DETECÇÃO DE CICLO\n");
+            printf(VERDE "DETECCAO DE CICLO\n" RESET);
             printf("========================================\n");
 
             if (detectar_ciclo(g))
-                printf("O grafo possui ciclo.\n");
+                printf(VERMELHO "O grafo possui ciclo.\n" RESET);
             else
-                printf("O grafo NÃO possui ciclo.\n");
-
-            /* ================================================
-             * ORDENAÇÃO TOPOLOGICA
-             * ================================================
-             */
+                printf(AMARELO "O grafo NAO possui ciclo.\n" RESET);
 
             printf("\n========================================\n");
-            printf("ORDENAÇÃO TOPOLOGICA\n");
+            printf(VERDE "ORDENACAO TOPOLOGICA\n" RESET);
             printf("========================================\n");
 
             ordenacao_topologica(g);
@@ -555,7 +604,7 @@ int main() {
 
         liberar_grafo(g);
 
-        printf("\nPressione ENTER para continuar...");
+        printf(MAGENTA_PISCANDO "\nPressione ENTER para continuar..." RESET);
 
         getchar();
         getchar();
