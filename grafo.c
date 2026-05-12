@@ -211,7 +211,7 @@ void desenhar_grafo(Grafo *g, int dirigido) {
                 if (dirigido)
                     printf("(%d) " AMARELO "----->" RESET " (%d)\n", i, j);
                 else
-                    printf("(%d) " AMARELO "-------" RESET " (%d)\n", i, j);
+                    printf("(%d) " AMARELO "------" RESET " (%d)\n", i, j);
             }
         }
     }
@@ -314,25 +314,15 @@ int ordenacao_topologica(Grafo *g) {
         }
     }
 
+    int ordem[MAX_VERTICES];
+
     int contagem = 0;
-
-    printf(AZUL "Ordem topologica:\n" RESET);
-
-    int primeiro = 1;
 
     while (frente < traseira) {
 
         int u = fila[frente++];
 
-        if (!primeiro) {
-            printf(AZUL "--> " RESET);
-        }
-
-        printf(AMARELO "%d " RESET, u);
-
-        primeiro = 0;
-
-        contagem++;
+        ordem[contagem++] = u;
 
         for (No *cur = g->adj[u].cabeca;
              cur;
@@ -348,15 +338,29 @@ int ordenacao_topologica(Grafo *g) {
         }
     }
 
-    printf("\n");
+    /* verifica ciclo */
 
     if (contagem != g->V) {
 
-        printf("VERMELHO \nCiclo detectado.\n" RESET);
+        printf(VERMELHO "\nCiclo detectado.\n" RESET);
         printf(VERMELHO "Ordenacao topologica impossivel.\n" RESET);
 
         return 0;
     }
+
+    /* imprime SOMENTE se for valida */
+
+    printf(AZUL "Ordem topologica:\n" RESET);
+
+    for (int i = 0; i < contagem; i++) {
+
+        if (i > 0)
+            printf(AZUL "--> " RESET);
+
+        printf(AMARELO "%d " RESET, ordem[i]);
+    }
+
+    printf("\n");
 
     return 1;
 }
@@ -384,7 +388,7 @@ int dfs_ciclo(Grafo *g,
 
         if (cor[u] == CINZA) {
 
-            printf("\nCiclo encontrado: %d -> %d\n",
+            printf(VERMELHO "\nCiclo encontrado: %d -> %d\n" RESET,
                    v, u);
 
             return 1;
@@ -501,8 +505,8 @@ int main() {
         scanf("%d", &E);
 
         printf(AZUL "\nTipo do grafo:\n" RESET);
-        printf("0 - Nao-dirigido\n");
-        printf("1 - Dirigido\n");
+        printf(AMARELO "0 - Nao-dirigido\n" RESET);
+        printf(AMARELO "1 - Dirigido\n" RESET);
 
         printf(AMARELO "\nEscolha: " RESET);
         scanf("%d", &dirigido);
@@ -510,7 +514,7 @@ int main() {
         Grafo *g = criar_grafo(V);
 
         printf(AZUL "\nDigite as arestas:\n" RESET);
-        printf("Formato: origem destino\n\n");
+        printf(AMARELO "Formato: origem destino\n\n" RESET);
 
         for (int i = 0; i < E; i++) {
 
@@ -524,7 +528,7 @@ int main() {
             if (u < 0 || u >= V ||
                 v < 0 || v >= V) {
 
-                printf("Vertice invalido.\n");
+                printf(VERMELHO "Vertice invalido.\n" RESET);
 
                 i--;
 
